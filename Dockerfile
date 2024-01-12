@@ -1,11 +1,21 @@
-FROM alpine:3.17
+# Stage 1: Build yq binary
+FROM debian:buster AS builder
 
-RUN apk update
-RUN apk add --no-cache tini && \
-    rm -f /var/cache/apk/*
-
+ARG PLATFORM
 ARG ARCH
-ADD ./hello-world/target/${ARCH}-unknown-linux-musl/release/hello-world /usr/local/bin/hello-world
-RUN chmod +x /usr/local/bin/hello-world
+
+RUN apt update && apt install -y ca-certificates
+RUN sed -i "s|http://|https://|g" /etc/apt/sources.list
+RUN apt-get update && apt-get -y upgrade && apt-get install -y -qq --no-install-recommends wget bash
+
+RUN wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${PLATFORM} -O /usr/bin/yq && chmod +x /usr/bin/yq
+
+# Stage 2: Create the final image
+FROM fedimintui/guardian-ui:v0.2
+
+# Copy yq binary from the builder stage
+COPY --from=builder /usr/bin/yq /bin/yq
+
+# Copy other necessary files
 ADD ./docker_entrypoint.sh /usr/local/bin/docker_entrypoint.sh
 RUN chmod a+x /usr/local/bin/docker_entrypoint.sh
